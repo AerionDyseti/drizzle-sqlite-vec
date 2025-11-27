@@ -1,5 +1,5 @@
 {
-  "name": "drizzle-sqlite-vec",
+  "name": "@aeriondyseti/drizzle-sqlite-vec",
   "version": "0.1.0",
   "description": "SQLite vector search extension for Drizzle ORM using sqlite-vec",
   "main": "./dist/index.js",
