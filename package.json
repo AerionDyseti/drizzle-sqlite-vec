@@ -1,0 +1,47 @@
+{
+  "name": "drizzle-sqlite-vec",
+  "version": "0.1.0",
+  "description": "SQLite vector search extension for Drizzle ORM using sqlite-vec",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "drizzle",
+    "sqlite",
+    "vector",
+    "sqlite-vec",
+    "embeddings",
+    "similarity-search"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "drizzle-orm": ">=0.30.0",
+    "better-sqlite3": ">=9.0.0",
+    "sqlite-vec": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.4.6",
+    "drizzle-orm": "^0.44.7",
+    "sqlite-vec": "^0.1.7-alpha.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.0"
+  }
+}
