@@ -108,6 +108,17 @@ export {
   type VectorSearchOptions,
 } from './query.js';
 
+// DML helpers for vec0 tables
+export {
+  insertVec0,
+  insertManyVec0,
+  deleteVec0,
+  updateVec0,
+  type Vec0InsertValues,
+  type Vec0UpdateValues,
+  type Vec0WhereCondition,
+} from './dml.js';
+
 // Type utilities
 export {
   // Types

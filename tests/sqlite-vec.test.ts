@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { sql } from 'drizzle-orm';
 import {
   serializeVector,
   vec0Table,
   vecFloat,
+  vecInteger,
+  vecText,
+  insertVec0,
+  insertManyVec0,
+  deleteVec0,
+  updateVec0,
 } from '../src/index.js';
 import { createTestContext, closeTestContext, type TestContext } from './setup.js';
 
@@ -277,6 +284,146 @@ describe('sqlite-vec Integration', () => {
       expect(results.length).toBe(2); // Only id 1 and 2 should be within distance 1.0
       expect(results[0].id).toBe(1);
       expect(results[1].id).toBe(2);
+    });
+  });
+
+  describe('DML Helpers Integration', () => {
+    it('should execute insertVec0 correctly', () => {
+      const itemsVec = vec0Table('dml_insert_vec', {
+        embedding: vecFloat('embedding', 4),
+      });
+      ctx.sqlite.exec(itemsVec.createSQL());
+
+      // Execute insert using Drizzle's db.run()
+      const query = insertVec0(itemsVec, {
+        embedding: [1, 0, 0, 0],
+      });
+      ctx.db.run(query);
+
+      // Verify insert worked by searching
+      const rows = ctx.sqlite
+        .prepare('SELECT rowid, distance FROM dml_insert_vec WHERE embedding MATCH ? AND k = 1')
+        .all(serializeVector([1, 0, 0, 0])) as Array<{ rowid: number; distance: number }>;
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].rowid).toBe(1);
+      expect(rows[0].distance).toBeCloseTo(0, 5);
+    });
+
+    it('should execute insertManyVec0 correctly', () => {
+      const itemsVec = vec0Table('dml_insert_many_vec', {
+        embedding: vecFloat('embedding', 4),
+      });
+      ctx.sqlite.exec(itemsVec.createSQL());
+
+      // Execute batch insert using Drizzle's db.run()
+      const query = insertManyVec0(itemsVec, [
+        { embedding: [1, 0, 0, 0] },
+        { embedding: [0, 1, 0, 0] },
+        { embedding: [0, 0, 1, 0] },
+      ]);
+      ctx.db.run(query);
+
+      // Verify all rows inserted
+      const rows = ctx.sqlite
+        .prepare('SELECT rowid FROM dml_insert_many_vec WHERE embedding MATCH ? AND k = 10')
+        .all(serializeVector([1, 0, 0, 0])) as Array<{ rowid: number }>;
+
+      expect(rows).toHaveLength(3);
+    });
+
+    it('should execute deleteVec0 correctly', () => {
+      const itemsVec = vec0Table('dml_delete_vec', {
+        embedding: vecFloat('embedding', 4),
+      });
+      ctx.sqlite.exec(itemsVec.createSQL());
+
+      // Insert a row
+      ctx.sqlite
+        .prepare('INSERT INTO dml_delete_vec(embedding) VALUES (?)')
+        .run(serializeVector([1, 0, 0, 0]));
+
+      // Verify it exists
+      let rows = ctx.sqlite
+        .prepare('SELECT rowid FROM dml_delete_vec WHERE embedding MATCH ? AND k = 1')
+        .all(serializeVector([1, 0, 0, 0])) as Array<{ rowid: number }>;
+      expect(rows).toHaveLength(1);
+
+      // Delete using DML helper via Drizzle's db.run()
+      const query = deleteVec0(itemsVec, 1);
+      ctx.db.run(query);
+
+      // Verify it's gone
+      rows = ctx.sqlite
+        .prepare('SELECT rowid FROM dml_delete_vec WHERE embedding MATCH ? AND k = 1')
+        .all(serializeVector([1, 0, 0, 0])) as Array<{ rowid: number }>;
+      expect(rows).toHaveLength(0);
+    });
+
+    it('should execute updateVec0 correctly', () => {
+      const itemsVec = vec0Table('dml_update_vec', {
+        embedding: vecFloat('embedding', 4),
+      });
+      ctx.sqlite.exec(itemsVec.createSQL());
+
+      // Insert a row
+      ctx.sqlite
+        .prepare('INSERT INTO dml_update_vec(embedding) VALUES (?)')
+        .run(serializeVector([1, 0, 0, 0]));
+
+      // Update using DML helper via Drizzle's db.run()
+      const query = updateVec0(itemsVec, { embedding: [0, 1, 0, 0] }, 1);
+      ctx.db.run(query);
+
+      // Verify the update - searching for the new vector should find it
+      const rows = ctx.sqlite
+        .prepare('SELECT rowid, distance FROM dml_update_vec WHERE embedding MATCH ? AND k = 1')
+        .all(serializeVector([0, 1, 0, 0])) as Array<{ rowid: number; distance: number }>;
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].rowid).toBe(1);
+      expect(rows[0].distance).toBeCloseTo(0, 5);
+    });
+
+    it('should support full CRUD workflow with DML helpers', () => {
+      // Note: vec0 tables have limitations - text auxiliary columns work best with rowid-based access
+      const itemsVec = vec0Table('dml_crud_vec', {
+        embedding: vecFloat('embedding', 4),
+      });
+      ctx.sqlite.exec(itemsVec.createSQL());
+
+      // CREATE - Insert items
+      ctx.db.run(insertVec0(itemsVec, { embedding: [1, 0, 0, 0] }));
+      ctx.db.run(insertVec0(itemsVec, { embedding: [0, 1, 0, 0] }));
+      ctx.db.run(insertVec0(itemsVec, { embedding: [0, 0, 1, 0] }));
+
+      // READ - Search for similar vectors
+      let rows = ctx.sqlite
+        .prepare('SELECT rowid, distance FROM dml_crud_vec WHERE embedding MATCH ? AND k = 10')
+        .all(serializeVector([1, 0, 0, 0])) as Array<{ rowid: number; distance: number }>;
+      expect(rows).toHaveLength(3);
+      expect(rows[0].rowid).toBe(1);
+      expect(rows[0].distance).toBeCloseTo(0, 5);
+
+      // UPDATE - Modify a vector via Drizzle's db.run()
+      ctx.db.run(updateVec0(itemsVec, { embedding: [0.5, 0.5, 0, 0] }, 1));
+
+      // Verify update
+      rows = ctx.sqlite
+        .prepare('SELECT rowid, distance FROM dml_crud_vec WHERE embedding MATCH ? AND k = 1')
+        .all(serializeVector([0.5, 0.5, 0, 0])) as Array<{ rowid: number; distance: number }>;
+      expect(rows[0].rowid).toBe(1);
+      expect(rows[0].distance).toBeCloseTo(0, 5);
+
+      // DELETE - Remove an item via Drizzle's db.run()
+      ctx.db.run(deleteVec0(itemsVec, 2));
+
+      // Verify delete - only 2 rows remaining
+      rows = ctx.sqlite
+        .prepare('SELECT rowid FROM dml_crud_vec WHERE embedding MATCH ? AND k = 10')
+        .all(serializeVector([1, 0, 0, 0])) as Array<{ rowid: number }>;
+      expect(rows).toHaveLength(2);
+      expect(rows.map(r => r.rowid).sort()).toEqual([1, 3]);
     });
   });
 });
